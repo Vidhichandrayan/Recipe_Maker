@@ -1,7 +1,16 @@
 import streamlit as st
 import requests
 
-BACKEND_URL = None  # backend not connected yet
+# ===============================
+# Backend config
+# ===============================
+# Backend NOT deployed yet
+BACKEND_URL = None
+# Later you will change this to:
+# BACKEND_URL = "https://your-backend.onrender.com"
+
+def backend_available():
+    return isinstance(BACKEND_URL, str) and BACKEND_URL.startswith("http")
 
 st.set_page_config(page_title="Smart Recipe Explorer", layout="centered")
 
@@ -15,11 +24,8 @@ if "preview_recipe" not in st.session_state:
     st.session_state.preview_recipe = None
     st.session_state.preview_ingredients = None
 
-def backend_available():
-    return BACKEND_URL is not None
-
 # -------------------------------
-# Generate (Preview Only)
+# Generate Recipe (Preview)
 # -------------------------------
 st.subheader("✨ Generate Recipe")
 
@@ -32,15 +38,21 @@ if st.button("Generate Recipe"):
     if not ingredients_input.strip():
         st.warning("Enter ingredients first")
     elif not backend_available():
-        st.info("Backend not connected yet. Frontend is live.")
+        st.info("🔌 Backend not connected yet. Frontend is live.")
     else:
-        res = requests.post(
-            f"{BACKEND_URL}/generate-recipe-preview",
-            json=ingredients_input.split()
-        )
-        if res.status_code == 200:
-            st.session_state.preview_recipe = res.json()["recipe"]
-            st.session_state.preview_ingredients = ingredients_input
+        try:
+            res = requests.post(
+                f"{BACKEND_URL}/generate-recipe-preview",
+                json=ingredients_input.split(),
+                timeout=10
+            )
+            if res.status_code == 200:
+                st.session_state.preview_recipe = res.json()["recipe"]
+                st.session_state.preview_ingredients = ingredients_input
+            else:
+                st.error("Backend error while generating recipe")
+        except Exception:
+            st.error("Could not connect to backend")
 
 # -------------------------------
 # Preview Section
@@ -51,7 +63,7 @@ if st.session_state.preview_recipe:
     st.markdown(st.session_state.preview_recipe)
 
 # -------------------------------
-# Saved Recipes Section
+# Saved Recipes
 # -------------------------------
 st.divider()
 st.subheader("📚 Saved Recipes")
@@ -59,6 +71,12 @@ st.subheader("📚 Saved Recipes")
 if not backend_available():
     st.info("Saved recipes will appear once backend is connected.")
 else:
-    saved = requests.get(f"{BACKEND_URL}/recipes")
-    if saved.status_code == 200:
-        st.write(saved.json())
+    try:
+        saved = requests.get(f"{BACKEND_URL}/recipes", timeout=10)
+        if saved.status_code == 200 and saved.json():
+            for recipe in saved.json()[::-1]:
+                st.write(recipe)
+        else:
+            st.info("No recipes saved yet.")
+    except Exception:
+        st.error("Backend unreachable")
