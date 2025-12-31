@@ -1,7 +1,7 @@
 from fastapi import FastAPI
-from database import engine, Base
-from ai_service import generate_recipe
-from crud import save_recipe, get_all_recipes, delete_recipe, update_recipe
+from .database import engine, Base
+from .ai_service import generate_recipe
+from .crud import save_recipe, get_all_recipes, delete_recipe, update_recipe
 
 Base.metadata.create_all(bind=engine)
 
@@ -36,7 +36,7 @@ def remove_recipe(recipe_id: int):
     delete_recipe(recipe_id)
     return {"message": "Recipe deleted"}
 
-# 🔹 Update (NEW)
+# 🔹 Update
 @app.put("/recipes/{recipe_id}")
 def edit_recipe(recipe_id: int, payload: dict):
     updated = update_recipe(recipe_id, payload["content"])
