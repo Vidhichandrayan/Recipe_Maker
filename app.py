@@ -1,69 +1,58 @@
 import streamlit as st
 import requests
 
-#BACKEND_URL = "https://YOUR-RENDER-URL.onrender.com"
-BACKEND_URL = "https://smart-recipe-explorer-demo.onrender.com"
+# ================= CONFIG =================
+BACKEND_URL = "https://recipe-maker-1-5xzf.onrender.com"
 
-st.set_page_config("Smart Recipe Explorer", "🍳")
-st.title("🍳 Smart Recipe Explorer (Demo)")
+st.set_page_config(
+    page_title="Smart Recipe Explorer",
+    page_icon="🍳",
+    layout="centered"
+)
 
-if "recipe" not in st.session_state:
-    st.session_state.recipe = None
+# ================= UI =================
+st.title("🔍 Smart Recipe Explorer")
 
-tab1, tab2 = st.tabs(["🤖 AI Generator", "📦 Saved Recipes"])
+tabs = st.tabs(["🤖 AI Generator"])
 
-# ---------- AI GENERATOR ----------
-with tab1:
-    ingredients = st.text_input("Enter ingredients (comma-separated)")
+with tabs[0]:
+    st.subheader("Generate a Recipe")
+
+    ingredients = st.text_input(
+        "Enter ingredients (comma-separated)",
+        placeholder="paneer, tomato, onion"
+    )
 
     if st.button("Generate Recipe"):
-        res = requests.post(
-            f"{BACKEND_URL}/generate-recipe",
-            json={"ingredients": ingredients},
-            timeout=60
-        )
-        st.session_state.recipe = res.json()
+        if not ingredients.strip():
+            st.warning("Please enter some ingredients.")
+        else:
+            with st.spinner("Generating recipe..."):
+                try:
+                    response = requests.post(
+                        f"{BACKEND_URL}/generate-recipe",
+                        json={"ingredients": ingredients},
+                        timeout=60
+                    )
 
-    if st.session_state.recipe:
-        r = st.session_state.recipe
-        st.subheader(r["name"])
+                    if response.status_code != 200:
+                        st.error(f"Backend error: {response.text}")
+                    else:
+                        data = response.json()
 
-        st.write("### Ingredients")
-        for i in r["ingredients"]:
-            st.write("-", i)
+                        # ===== DISPLAY RESULT =====
+                        st.success("Recipe generated!")
 
-        st.write("### Instructions")
-        for step in r["instructions"]:
-            st.write("•", step)
+                        st.markdown(f"## 🍽️ {data.get('name', 'Recipe')}")
 
-        if st.button("💾 Save Recipe"):
-            payload = {
-                "name": r["name"],
-                "cuisine": "AI Generated",
-                "isVegetarian": True,
-                "prepTimeMinutes": 30,
-                "ingredients": r["ingredients"],
-                "instructions": " ".join(r["instructions"]),
-                "difficulty": "medium",
-                "tags": ["demo", "ai"]
-            }
-            resp = requests.post(f"{BACKEND_URL}/recipes", json=payload)
-            if resp.status_code == 200:
-                st.success("Recipe saved!")
+                        st.markdown("### 🧾 Ingredients")
+                        for item in data.get("ingredients", []):
+                            st.write(f"- {item}")
 
-# ---------- SAVED RECIPES ----------
-with tab2:
-    try:
-        recipes = requests.get(f"{BACKEND_URL}/recipes").json()
-    except:
-        recipes = []
+                        st.markdown("### 👩‍🍳 Instructions")
+                        for idx, step in enumerate(data.get("instructions", []), start=1):
+                            st.write(f"{idx}. {step}")
 
-    if not recipes:
-        st.info("No saved recipes yet")
-
-    for r in recipes:
-        with st.expander(r["name"]):
-            st.write(", ".join(r["ingredients"]))
-            if st.button(f"Delete {r['id']}"):
-                requests.delete(f"{BACKEND_URL}/recipes/{r['id']}")
-                st.experimental_rerun()
+                except requests.exceptions.RequestException as e:
+                    st.error("Could not connect to backend. Please try again later.")
+                    st.caption(str(e))
