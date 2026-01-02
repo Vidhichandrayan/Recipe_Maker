@@ -1,6 +1,7 @@
 import json
 import random
 import os
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -23,6 +24,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------------- HEALTH ----------------
+@app.get("/")
+def health():
+    return {"status": "ok"}
 
 # ---------------- DB DEP ----------------
 def get_db():
@@ -65,7 +71,7 @@ Return ONLY valid JSON:
             start, end = raw.find("{"), raw.rfind("}")
             return json.loads(raw[start:end + 1])
 
-    except Exception as e:
+    except Exception:
         return {
             "name": "Fallback Recipe",
             "ingredients": ingredients.split(","),
