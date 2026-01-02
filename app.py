@@ -1,61 +1,69 @@
 import streamlit as st
 import requests
 
-API = "http://127.0.0.1:8000"
+BACKEND_URL = "https://YOUR-BACKEND.onrender.com"
 
 st.set_page_config("Smart Recipe Explorer", "🍳")
-st.title("🍳 Smart Recipe Explorer")
+st.title("🍳 Smart Recipe Explorer (Demo)")
 
 if "recipe" not in st.session_state:
     st.session_state.recipe = None
 
 tab1, tab2 = st.tabs(["🤖 AI Generator", "📦 Saved Recipes"])
 
+# ---------- AI TAB ----------
 with tab1:
     ingredients = st.text_input("Enter ingredients (comma-separated)")
 
     if st.button("Generate Recipe"):
-        res = requests.post(f"{API}/generate-recipe", json={"ingredients": ingredients})
+        res = requests.post(
+            f"{BACKEND_URL}/generate-recipe",
+            json={"ingredients": ingredients},
+            timeout=60
+        )
         st.session_state.recipe = res.json()
 
     if st.session_state.recipe:
         r = st.session_state.recipe
         st.subheader(r["name"])
 
+        st.write("### Ingredients")
         for i in r["ingredients"]:
             st.write("-", i)
 
-        for s in r["instructions"]:
-            st.write("•", s)
+        st.write("### Instructions")
+        for step in r["instructions"]:
+            st.write("•", step)
 
         if st.button("💾 Save Recipe"):
             payload = {
-                "name": str(r["name"]),
+                "name": r["name"],
                 "cuisine": "AI Generated",
                 "isVegetarian": True,
                 "prepTimeMinutes": 30,
-                "ingredients": [str(i) for i in r["ingredients"]],
+                "ingredients": r["ingredients"],
                 "instructions": " ".join(r["instructions"]),
                 "difficulty": "medium",
-                "tags": ["ai", "generated"]
+                "tags": ["ai", "demo"]
             }
 
-            resp = requests.post(f"{API}/recipes", json=payload)
-            if resp.status_code in [200, 201]:
-                st.success("✅ Recipe saved")
-            else:
-                st.error("❌ Save failed")
-                st.code(resp.text)
+            resp = requests.post(f"{BACKEND_URL}/recipes", json=payload)
+            if resp.status_code == 200:
+                st.success("Recipe saved!")
 
+# ---------- SAVED ----------
 with tab2:
-    recipes = requests.get(f"{API}/recipes").json()
+    try:
+        recipes = requests.get(f"{BACKEND_URL}/recipes").json()
+    except:
+        recipes = []
 
     if not recipes:
-        st.info("No recipes saved")
+        st.info("No saved recipes")
 
     for r in recipes:
         with st.expander(r["name"]):
             st.write(", ".join(r["ingredients"]))
             if st.button(f"Delete {r['id']}"):
-                requests.delete(f"{API}/recipes/{r['id']}")
+                requests.delete(f"{BACKEND_URL}/recipes/{r['id']}")
                 st.experimental_rerun()
