@@ -1,40 +1,28 @@
 from sqlalchemy.orm import Session
-from database import SessionLocal
-from models import Recipe
+from backend import models, schemas
 
-def save_recipe(ingredients: list[str], content: str):
-    db: Session = SessionLocal()
-    recipe = Recipe(
-        ingredients=", ".join(ingredients),
-        content=content
+def create_recipe(db: Session, recipe: schemas.RecipeCreate):
+    db_recipe = models.Recipe(
+        name=recipe.name,
+        cuisine=recipe.cuisine,
+        isVegetarian=recipe.isVegetarian,
+        prepTimeMinutes=recipe.prepTimeMinutes,
+        ingredients=",".join(recipe.ingredients),
+        instructions=recipe.instructions,
+        difficulty=recipe.difficulty,
+        tags=",".join(recipe.tags),
     )
-    db.add(recipe)
+    db.add(db_recipe)
     db.commit()
-    db.refresh(recipe)
-    db.close()
-    return recipe
+    db.refresh(db_recipe)
+    return db_recipe
 
-def get_all_recipes():
-    db: Session = SessionLocal()
-    recipes = db.query(Recipe).all()
-    db.close()
-    return recipes
+def get_all_recipes(db: Session):
+    return db.query(models.Recipe).all()
 
-def delete_recipe(recipe_id: int):
-    db = SessionLocal()
-    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+def delete_recipe(db: Session, recipe_id: int):
+    recipe = db.query(models.Recipe).filter(models.Recipe.id == recipe_id).first()
     if recipe:
         db.delete(recipe)
         db.commit()
-    db.close()
-
-# 🔹 UPDATE (NEW)
-def update_recipe(recipe_id: int, new_content: str):
-    db = SessionLocal()
-    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
-    if recipe:
-        recipe.content = new_content
-        db.commit()
-        db.refresh(recipe)
-    db.close()
     return recipe

@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
-from database import SessionLocal, engine, Base
-from models import Recipe
+from .database import SessionLocal, engine, Base
+from .models import Recipe
+
 import uuid
 
 def generate_recipe_id():

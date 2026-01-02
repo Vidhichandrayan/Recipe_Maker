@@ -1,21 +1,16 @@
-# Virtual environments
+# Python
 venv/
-env/
-.venv/
-
-# Environment variables
-.env
-
-# Database files
-*.db
-
-# VS Code
-.vscode/
-
-# Python cache
 __pycache__/
 *.pyc
 
-# OS files
-.DS_Store
-Thumbs.db
+# Database
+recipes.db
+
+# Environment
+.env
+
+# Editor
+.vscode/
+
+# Streamlit
+.streamlit/

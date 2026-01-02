@@ -1,13 +1,12 @@
 from pydantic import BaseModel
+from typing import List
 
 class RecipeCreate(BaseModel):
-    ingredients: list[str]
-    content: str
-
-class RecipeOut(BaseModel):
-    id: int
-    ingredients: str
-    content: str
-
-    class Config:
-        orm_mode = True
+    name: str
+    cuisine: str
+    isVegetarian: bool
+    prepTimeMinutes: int
+    ingredients: List[str]
+    instructions: str
+    difficulty: str
+    tags: List[str]

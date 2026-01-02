@@ -1,89 +1,61 @@
 import streamlit as st
 import requests
 
-# Backend URL from Streamlit secrets
-BACKEND_URL = st.secrets.get("BACKEND_URL")
+API = "http://127.0.0.1:8000"
 
-st.set_page_config(page_title="Smart Recipe Explorer", layout="centered")
+st.set_page_config("Smart Recipe Explorer", "🍳")
+st.title("🍳 Smart Recipe Explorer")
 
-st.title("🍽️ Smart Recipe Explorer")
-st.caption("AI-powered recipe generation with full CRUD")
+if "recipe" not in st.session_state:
+    st.session_state.recipe = None
 
-# -------------------------------
-# Session state
-# -------------------------------
-if "preview_recipe" not in st.session_state:
-    st.session_state.preview_recipe = None
-    st.session_state.preview_ingredients = None
+tab1, tab2 = st.tabs(["🤖 AI Generator", "📦 Saved Recipes"])
 
-# -------------------------------
-# Generate Recipe
-# -------------------------------
-st.subheader("✨ Generate Recipe")
+with tab1:
+    ingredients = st.text_input("Enter ingredients (comma-separated)")
 
-ingredients_input = st.text_input(
-    "Enter ingredients (space-separated)",
-    placeholder="paneer tomato onion"
-)
+    if st.button("Generate Recipe"):
+        res = requests.post(f"{API}/generate-recipe", json={"ingredients": ingredients})
+        st.session_state.recipe = res.json()
 
-if st.button("Generate Recipe"):
-    if not BACKEND_URL:
-        st.error("Backend URL not configured")
-    elif not ingredients_input.strip():
-        st.warning("Enter ingredients first")
-    else:
-        try:
-            res = requests.post(
-                f"{BACKEND_URL}/generate-recipe-preview",
-                json=ingredients_input.split(),
-                timeout=15
-            )
-            if res.status_code == 200:
-                st.session_state.preview_recipe = res.json()["recipe"]
-                st.session_state.preview_ingredients = ingredients_input
+    if st.session_state.recipe:
+        r = st.session_state.recipe
+        st.subheader(r["name"])
+
+        for i in r["ingredients"]:
+            st.write("-", i)
+
+        for s in r["instructions"]:
+            st.write("•", s)
+
+        if st.button("💾 Save Recipe"):
+            payload = {
+                "name": str(r["name"]),
+                "cuisine": "AI Generated",
+                "isVegetarian": True,
+                "prepTimeMinutes": 30,
+                "ingredients": [str(i) for i in r["ingredients"]],
+                "instructions": " ".join(r["instructions"]),
+                "difficulty": "medium",
+                "tags": ["ai", "generated"]
+            }
+
+            resp = requests.post(f"{API}/recipes", json=payload)
+            if resp.status_code in [200, 201]:
+                st.success("✅ Recipe saved")
             else:
-                st.error("Backend error")
-        except requests.exceptions.RequestException:
-            st.error("Backend not reachable")
+                st.error("❌ Save failed")
+                st.code(resp.text)
 
-# -------------------------------
-# Preview + Save
-# -------------------------------
-if st.session_state.preview_recipe:
-    st.divider()
-    st.subheader("🧾 Recipe Preview")
-    st.markdown(st.session_state.preview_recipe)
+with tab2:
+    recipes = requests.get(f"{API}/recipes").json()
 
-    if st.button("💾 Save Recipe"):
-        try:
-            requests.post(
-                f"{BACKEND_URL}/save-recipe",
-                json={
-                    "ingredients": st.session_state.preview_ingredients.split(),
-                    "content": st.session_state.preview_recipe
-                },
-                timeout=15
-            )
-            st.success("Recipe saved!")
-            st.session_state.preview_recipe = None
-        except requests.exceptions.RequestException:
-            st.error("Save failed")
+    if not recipes:
+        st.info("No recipes saved")
 
-# -------------------------------
-# Saved Recipes
-# -------------------------------
-st.divider()
-st.subheader("📚 Saved Recipes")
-
-if not BACKEND_URL:
-    st.info("Backend not connected")
-else:
-    try:
-        saved = requests.get(f"{BACKEND_URL}/recipes", timeout=15)
-        if saved.status_code == 200 and saved.json():
-            for recipe in saved.json()[::-1]:
-                st.write(recipe)
-        else:
-            st.info("No recipes saved yet")
-    except requests.exceptions.RequestException:
-        st.error("Backend not reachable")
+    for r in recipes:
+        with st.expander(r["name"]):
+            st.write(", ".join(r["ingredients"]))
+            if st.button(f"Delete {r['id']}"):
+                requests.delete(f"{API}/recipes/{r['id']}")
+                st.experimental_rerun()

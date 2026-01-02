@@ -1,43 +1,104 @@
-from fastapi import FastAPI
-from .database import engine, Base
-from .ai_service import generate_recipe
-from .crud import save_recipe, get_all_recipes, delete_recipe, update_recipe
+import json
+import random
+import requests
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 
-Base.metadata.create_all(bind=engine)
+from backend.database import SessionLocal, engine
+from backend import models, crud, schemas
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL = "mistral"
+
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Smart Recipe Explorer")
 
-@app.get("/")
-def root():
-    return {"message": "Smart Recipe Explorer running 🚀"}
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# 🔹 Generate ONLY (no save)
-@app.post("/generate-recipe-preview")
-def generate_recipe_preview(ingredients: list[str]):
-    recipe_text = generate_recipe(ingredients)
-    return {"recipe": recipe_text}
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-# 🔹 Save explicitly
-@app.post("/save-recipe")
-def save_recipe_api(payload: dict):
-    ingredients = payload["ingredients"]
-    content = payload["content"]
-    saved = save_recipe(ingredients, content)
-    return {"id": saved.id, "message": "Recipe saved"}
+def call_mistral(prompt: str) -> str:
+    payload = {
+        "model": MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.9}
+    }
+    r = requests.post(OLLAMA_URL, json=payload, timeout=90)
+    r.raise_for_status()
+    return r.json().get("response", "")
 
-# 🔹 Read
+@app.post("/generate-recipe")
+def generate_recipe(req: dict):
+    ingredients = req.get("ingredients", "")
+    seed = random.randint(1, 99999)
+
+    prompt = f"""
+Create a UNIQUE recipe using: {ingredients}.
+Variation ID: {seed}
+
+Return ONLY valid JSON:
+{{
+  "name": "Recipe name",
+  "ingredients": ["item1", "item2"],
+  "instructions": ["step1", "step2"]
+}}
+"""
+
+    try:
+        raw = call_mistral(prompt)
+        try:
+            return json.loads(raw)
+        except:
+            start, end = raw.find("{"), raw.rfind("}")
+            return json.loads(raw[start:end+1])
+    except:
+        return {
+            "name": "Fallback Recipe",
+            "ingredients": ingredients.split(","),
+            "instructions": ["Prepare", "Cook", "Serve"]
+        }
+
+@app.post("/recipes")
+def create_recipe(recipe: schemas.RecipeCreate, db: Session = Depends(get_db)):
+    try:
+        return crud.create_recipe(db, recipe)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.get("/recipes")
-def read_recipes():
-    return get_all_recipes()
+def get_recipes(db: Session = Depends(get_db)):
+    recipes = crud.get_all_recipes(db)
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "cuisine": r.cuisine,
+            "isVegetarian": r.isVegetarian,
+            "prepTimeMinutes": r.prepTimeMinutes,
+            "ingredients": r.ingredients.split(","),
+            "instructions": r.instructions,
+            "difficulty": r.difficulty,
+            "tags": r.tags.split(","),
+        }
+        for r in recipes
+    ]
 
-# 🔹 Delete
 @app.delete("/recipes/{recipe_id}")
-def remove_recipe(recipe_id: int):
-    delete_recipe(recipe_id)
-    return {"message": "Recipe deleted"}
-
-# 🔹 Update
-@app.put("/recipes/{recipe_id}")
-def edit_recipe(recipe_id: int, payload: dict):
-    updated = update_recipe(recipe_id, payload["content"])
-    return {"message": "Recipe updated", "recipe": updated}
+def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
+    recipe = crud.delete_recipe(db, recipe_id)
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return {"message": "Deleted"}
