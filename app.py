@@ -1,7 +1,8 @@
 import streamlit as st
 import requests
 
-BACKEND_URL = "https://YOUR-BACKEND.onrender.com"
+#BACKEND_URL = "https://YOUR-RENDER-URL.onrender.com"
+BACKEND_URL = "https://smart-recipe-explorer-demo.onrender.com"
 
 st.set_page_config("Smart Recipe Explorer", "🍳")
 st.title("🍳 Smart Recipe Explorer (Demo)")
@@ -11,7 +12,7 @@ if "recipe" not in st.session_state:
 
 tab1, tab2 = st.tabs(["🤖 AI Generator", "📦 Saved Recipes"])
 
-# ---------- AI TAB ----------
+# ---------- AI GENERATOR ----------
 with tab1:
     ingredients = st.text_input("Enter ingredients (comma-separated)")
 
@@ -44,14 +45,13 @@ with tab1:
                 "ingredients": r["ingredients"],
                 "instructions": " ".join(r["instructions"]),
                 "difficulty": "medium",
-                "tags": ["ai", "demo"]
+                "tags": ["demo", "ai"]
             }
-
             resp = requests.post(f"{BACKEND_URL}/recipes", json=payload)
             if resp.status_code == 200:
                 st.success("Recipe saved!")
 
-# ---------- SAVED ----------
+# ---------- SAVED RECIPES ----------
 with tab2:
     try:
         recipes = requests.get(f"{BACKEND_URL}/recipes").json()
@@ -59,7 +59,7 @@ with tab2:
         recipes = []
 
     if not recipes:
-        st.info("No saved recipes")
+        st.info("No saved recipes yet")
 
     for r in recipes:
         with st.expander(r["name"]):
