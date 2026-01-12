@@ -15,13 +15,12 @@ if st.button("Generate Recipe"):
     if not ingredients.strip():
         st.warning("Please enter ingredients")
     else:
-        with st.spinner("Waking up AI server and generating recipe..."):
+        with st.spinner("Generating recipe using AI..."):
             try:
-                # Wake up backend (Render free tier sleeps)
+                # Wake Render backend
                 requests.get(f"{API}/", timeout=30)
                 time.sleep(2)
 
-                # Generate recipe
                 res = requests.post(
                     f"{API}/generate-recipe",
                     json={"ingredients": ingredients},
@@ -30,8 +29,6 @@ if st.button("Generate Recipe"):
 
                 if res.status_code == 200:
                     data = res.json()
-
-                    st.success("Recipe generated!")
 
                     st.subheader(data["name"])
 
@@ -43,7 +40,7 @@ if st.button("Generate Recipe"):
                     for idx, step in enumerate(data["instructions"], 1):
                         st.write(f"{idx}. {step}")
 
-                    # ---- SAVE TO DB ----
+                    # SAVE TO DATABASE
                     if st.button("💾 Save Recipe"):
                         payload = {
                             "name": data["name"],
@@ -59,44 +56,42 @@ if st.button("Generate Recipe"):
                         save = requests.post(f"{API}/recipes", json=payload)
 
                         if save.status_code == 200:
+                            st.cache_data.clear()   # 🔥 force refresh
                             st.success("Recipe saved!")
                             time.sleep(1)
                             st.rerun()
                         else:
-                            st.error("Failed to save recipe")
+                            st.error(save.text)
 
                 else:
-                    st.error("Backend error:")
-                    st.code(res.text)
+                    st.error("AI backend error")
 
-            except:
-                st.error("Backend is waking up. Please wait 30 seconds and try again.")
+            except Exception:
+                st.error("Backend is waking up. Please try again in 20 seconds.")
 
-# ---------------- SAVED RECIPES (CRUD) ----------------
+# ---------------- SAVED RECIPES ----------------
 st.markdown("---")
 st.markdown("## 📚 Saved Recipes")
 
+@st.cache_data(ttl=10)
+def load_recipes():
+    return requests.get(f"{API}/recipes").json()
+
 try:
-    recipes = requests.get(f"{API}/recipes", timeout=30).json()
+    recipes = load_recipes()
 
     if recipes:
         for r in recipes:
-            with st.container():
-                st.markdown(f"### {r['name']}")
-                st.write(f"🍽 Cuisine: {r['cuisine']}")
-                st.write(f"⏱ Prep Time: {r['prepTimeMinutes']} minutes")
-                st.write(f"🥗 Vegetarian: {'Yes' if r['isVegetarian'] else 'No'}")
-                st.write(f"🔥 Difficulty: {r['difficulty']}")
-                st.write("🧂 Ingredients:", ", ".join(r["ingredients"]))
-                st.write("🏷 Tags:", ", ".join(r["tags"]))
+            st.markdown(f"### {r['name']}")
+            st.write("Ingredients:", ", ".join(r["ingredients"]))
+            st.write("Difficulty:", r["difficulty"])
 
-                if st.button(f"🗑 Delete {r['id']}"):
-                    requests.delete(f"{API}/recipes/{r['id']}")
-                    st.success("Deleted!")
-                    time.sleep(1)
-                    st.rerun()
+            if st.button(f"🗑 Delete {r['id']}"):
+                requests.delete(f"{API}/recipes/{r['id']}")
+                st.cache_data.clear()
+                st.rerun()
     else:
         st.info("No saved recipes yet.")
 
 except:
-    st.warning("Could not load saved recipes.")
+    st.warning("Could not load recipes.")
