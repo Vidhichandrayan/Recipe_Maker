@@ -1,58 +1,102 @@
 import streamlit as st
 import requests
+import time
 
-# ================= CONFIG =================
-BACKEND_URL = "https://recipe-maker-1-5xzf.onrender.com"
+API = "https://recipe-maker-1-5xzf.onrender.com"
 
-st.set_page_config(
-    page_title="Smart Recipe Explorer",
-    page_icon="🍳",
-    layout="centered"
-)
+st.set_page_config(page_title="Smart Recipe Explorer", layout="centered")
 
-# ================= UI =================
-st.title("🔍 Smart Recipe Explorer")
+st.title("🍳 Smart Recipe Explorer")
 
-tabs = st.tabs(["🤖 AI Generator"])
+# ---------------- AI GENERATION ----------------
+ingredients = st.text_input("Enter ingredients (comma-separated)")
 
-with tabs[0]:
-    st.subheader("Generate a Recipe")
+if st.button("Generate Recipe"):
+    if not ingredients.strip():
+        st.warning("Please enter ingredients")
+    else:
+        with st.spinner("Waking up AI server and generating recipe..."):
+            try:
+                # Wake up backend (Render free tier sleeps)
+                requests.get(f"{API}/", timeout=30)
+                time.sleep(2)
 
-    ingredients = st.text_input(
-        "Enter ingredients (comma-separated)",
-        placeholder="paneer, tomato, onion"
-    )
+                # Generate recipe
+                res = requests.post(
+                    f"{API}/generate-recipe",
+                    json={"ingredients": ingredients},
+                    timeout=120
+                )
 
-    if st.button("Generate Recipe"):
-        if not ingredients.strip():
-            st.warning("Please enter some ingredients.")
-        else:
-            with st.spinner("Generating recipe..."):
-                try:
-                    response = requests.post(
-                        f"{BACKEND_URL}/generate-recipe",
-                        json={"ingredients": ingredients},
-                        timeout=60
-                    )
+                if res.status_code == 200:
+                    data = res.json()
 
-                    if response.status_code != 200:
-                        st.error(f"Backend error: {response.text}")
-                    else:
-                        data = response.json()
+                    st.success("Recipe generated!")
 
-                        # ===== DISPLAY RESULT =====
-                        st.success("Recipe generated!")
+                    st.subheader(data["name"])
 
-                        st.markdown(f"## 🍽️ {data.get('name', 'Recipe')}")
+                    st.markdown("### 🥕 Ingredients")
+                    for i in data["ingredients"]:
+                        st.write(f"- {i}")
 
-                        st.markdown("### 🧾 Ingredients")
-                        for item in data.get("ingredients", []):
-                            st.write(f"- {item}")
+                    st.markdown("### 👨‍🍳 Instructions")
+                    for idx, step in enumerate(data["instructions"], 1):
+                        st.write(f"{idx}. {step}")
 
-                        st.markdown("### 👩‍🍳 Instructions")
-                        for idx, step in enumerate(data.get("instructions", []), start=1):
-                            st.write(f"{idx}. {step}")
+                    # ---- SAVE TO DB ----
+                    if st.button("💾 Save Recipe"):
+                        payload = {
+                            "name": data["name"],
+                            "cuisine": "AI Generated",
+                            "isVegetarian": True,
+                            "prepTimeMinutes": 15,
+                            "ingredients": data["ingredients"],
+                            "instructions": data["instructions"],
+                            "difficulty": "Medium",
+                            "tags": ["ai", "generated"]
+                        }
 
-                except requests.exceptions.RequestException as e:
-                    st.error("Could not connect to backend. Please try again later.")
-                    st.caption(str(e))
+                        save = requests.post(f"{API}/recipes", json=payload)
+
+                        if save.status_code == 200:
+                            st.success("Recipe saved!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("Failed to save recipe")
+
+                else:
+                    st.error("Backend error:")
+                    st.code(res.text)
+
+            except:
+                st.error("Backend is waking up. Please wait 30 seconds and try again.")
+
+# ---------------- SAVED RECIPES (CRUD) ----------------
+st.markdown("---")
+st.markdown("## 📚 Saved Recipes")
+
+try:
+    recipes = requests.get(f"{API}/recipes", timeout=30).json()
+
+    if recipes:
+        for r in recipes:
+            with st.container():
+                st.markdown(f"### {r['name']}")
+                st.write(f"🍽 Cuisine: {r['cuisine']}")
+                st.write(f"⏱ Prep Time: {r['prepTimeMinutes']} minutes")
+                st.write(f"🥗 Vegetarian: {'Yes' if r['isVegetarian'] else 'No'}")
+                st.write(f"🔥 Difficulty: {r['difficulty']}")
+                st.write("🧂 Ingredients:", ", ".join(r["ingredients"]))
+                st.write("🏷 Tags:", ", ".join(r["tags"]))
+
+                if st.button(f"🗑 Delete {r['id']}"):
+                    requests.delete(f"{API}/recipes/{r['id']}")
+                    st.success("Deleted!")
+                    time.sleep(1)
+                    st.rerun()
+    else:
+        st.info("No saved recipes yet.")
+
+except:
+    st.warning("Could not load saved recipes.")

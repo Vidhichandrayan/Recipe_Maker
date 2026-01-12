@@ -8,7 +8,7 @@ def create_recipe(db: Session, recipe: schemas.RecipeCreate):
         isVegetarian=recipe.isVegetarian,
         prepTimeMinutes=recipe.prepTimeMinutes,
         ingredients=",".join(recipe.ingredients),
-        instructions=recipe.instructions,
+        instructions="|".join(recipe.instructions),
         difficulty=recipe.difficulty,
         tags=",".join(recipe.tags),
     )
