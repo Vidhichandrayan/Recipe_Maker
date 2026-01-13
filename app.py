@@ -36,8 +36,13 @@ with tab1:
                     if st.button("💾 Save Recipe"):
                         payload = {
                             "name": data["name"],
+                            "cuisine": "Other",
+                            "isVegetarian": False,
+                            "prepTimeMinutes": 30,
                             "ingredients": data["ingredients"],
-                            "instructions": data["instructions"]
+                            "instructions": data["instructions"],
+                            "difficulty": "Medium",
+                            "tags": ["ai-generated"]
                         }
 
                         s = requests.post(f"{API}/recipes", json=payload)

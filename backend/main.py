@@ -94,7 +94,7 @@ def get_recipes(db: Session = Depends(get_db)):
             "isVegetarian": r.isVegetarian,
             "prepTimeMinutes": r.prepTimeMinutes,
             "ingredients": r.ingredients.split(","),
-            "instructions": r.instructions,
+            "instructions": r.instructions.split("|"),
             "difficulty": r.difficulty,
             "tags": r.tags.split(","),
         }
