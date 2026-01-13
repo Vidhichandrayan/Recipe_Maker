@@ -1,19 +1,22 @@
 import json
 import random
-import requests
+import os
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from groq import Groq
 
 from backend.database import SessionLocal, engine
 from backend import models, crud, schemas
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "mistral"
+# ---------------- CONFIG ----------------
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+MODEL = "llama-3.1-8b-instant"
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Smart Recipe Explorer")
+app = FastAPI(title="Smart Recipe Explorer – Demo")
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,6 +25,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------- HEALTH ----------------
+@app.get("/")
+def health():
+    return {"status": "ok"}
+
+# ---------------- DB DEP ----------------
 def get_db():
     db = SessionLocal()
     try:
@@ -29,21 +38,11 @@ def get_db():
     finally:
         db.close()
 
-def call_mistral(prompt: str) -> str:
-    payload = {
-        "model": MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.9}
-    }
-    r = requests.post(OLLAMA_URL, json=payload, timeout=90)
-    r.raise_for_status()
-    return r.json().get("response", "")
-
+# ---------------- AI GENERATION ----------------
 @app.post("/generate-recipe")
 def generate_recipe(req: dict):
     ingredients = req.get("ingredients", "")
-    seed = random.randint(1, 99999)
+    seed = random.randint(1000, 99999)
 
     prompt = f"""
 Create a UNIQUE recipe using: {ingredients}.
@@ -58,25 +57,31 @@ Return ONLY valid JSON:
 """
 
     try:
-        raw = call_mistral(prompt)
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+        )
+
+        raw = response.choices[0].message.content.strip()
+
         try:
             return json.loads(raw)
         except:
             start, end = raw.find("{"), raw.rfind("}")
-            return json.loads(raw[start:end+1])
-    except:
+            return json.loads(raw[start:end + 1])
+
+    except Exception:
         return {
             "name": "Fallback Recipe",
             "ingredients": ingredients.split(","),
             "instructions": ["Prepare", "Cook", "Serve"]
         }
 
+# ---------------- CRUD ----------------
 @app.post("/recipes")
 def create_recipe(recipe: schemas.RecipeCreate, db: Session = Depends(get_db)):
-    try:
-        return crud.create_recipe(db, recipe)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    return crud.create_recipe(db, recipe)
 
 @app.get("/recipes")
 def get_recipes(db: Session = Depends(get_db)):

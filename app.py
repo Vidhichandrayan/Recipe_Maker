@@ -1,61 +1,83 @@
 import streamlit as st
 import requests
 
-API = "http://127.0.0.1:8000"
+# Public Render backend
+API = "https://recipe-maker-1-5xzf.onrender.com"
 
-st.set_page_config("Smart Recipe Explorer", "🍳")
+st.set_page_config(page_title="Smart Recipe Explorer", layout="wide")
+
 st.title("🍳 Smart Recipe Explorer")
 
-if "recipe" not in st.session_state:
-    st.session_state.recipe = None
+tab1, tab2 = st.tabs(["AI Generator", "Saved Recipes"])
 
-tab1, tab2 = st.tabs(["🤖 AI Generator", "📦 Saved Recipes"])
-
+# ---------------------------
+# AI Generator Tab
+# ---------------------------
 with tab1:
     ingredients = st.text_input("Enter ingredients (comma-separated)")
 
     if st.button("Generate Recipe"):
-        res = requests.post(f"{API}/generate-recipe", json={"ingredients": ingredients})
-        st.session_state.recipe = res.json()
+        if ingredients.strip() == "":
+            st.warning("Please enter ingredients")
+        else:
+            with st.spinner("Generating recipe..."):
+                try:
+                    res = requests.post(
+                        f"{API}/generate",
+                        json={"ingredients": ingredients},
+                        timeout=30
+                    )
 
-    if st.session_state.recipe:
-        r = st.session_state.recipe
-        st.subheader(r["name"])
+                    if res.status_code == 200:
+                        data = res.json()
 
-        for i in r["ingredients"]:
-            st.write("-", i)
+                        st.subheader(data["title"])
+                        st.markdown("### Ingredients")
+                        st.write(data["ingredients"])
+                        st.markdown("### Instructions")
+                        st.write(data["instructions"])
 
-        for s in r["instructions"]:
-            st.write("•", s)
+                        if st.button("💾 Save Recipe"):
+                            save = requests.post(
+                                f"{API}/recipes",
+                                json=data,
+                                timeout=30
+                            )
+                            if save.status_code == 200:
+                                st.success("Recipe saved successfully!")
+                            else:
+                                st.error("Failed to save recipe")
 
-        if st.button("💾 Save Recipe"):
-            payload = {
-                "name": str(r["name"]),
-                "cuisine": "AI Generated",
-                "isVegetarian": True,
-                "prepTimeMinutes": 30,
-                "ingredients": [str(i) for i in r["ingredients"]],
-                "instructions": " ".join(r["instructions"]),
-                "difficulty": "medium",
-                "tags": ["ai", "generated"]
-            }
+                    else:
+                        st.error("Recipe generation failed")
 
-            resp = requests.post(f"{API}/recipes", json=payload)
-            if resp.status_code in [200, 201]:
-                st.success("✅ Recipe saved")
-            else:
-                st.error("❌ Save failed")
-                st.code(resp.text)
+                except:
+                    st.error("Backend is waking up. Try again in 10 seconds.")
 
+# ---------------------------
+# Saved Recipes Tab
+# ---------------------------
 with tab2:
-    recipes = requests.get(f"{API}/recipes").json()
+    st.subheader("📦 Saved Recipes")
 
-    if not recipes:
-        st.info("No recipes saved")
+    if st.button("Load Saved Recipes"):
+        try:
+            res = requests.get(f"{API}/recipes", timeout=30)
 
-    for r in recipes:
-        with st.expander(r["name"]):
-            st.write(", ".join(r["ingredients"]))
-            if st.button(f"Delete {r['id']}"):
-                requests.delete(f"{API}/recipes/{r['id']}")
-                st.experimental_rerun()
+            if res.status_code == 200:
+                recipes = res.json()
+
+                if len(recipes) == 0:
+                    st.info("No recipes saved yet")
+                else:
+                    for r in recipes:
+                        with st.expander(r["title"]):
+                            st.markdown("**Ingredients**")
+                            st.write(r["ingredients"])
+                            st.markdown("**Instructions**")
+                            st.write(r["instructions"])
+            else:
+                st.error("Failed to fetch recipes")
+
+        except:
+            st.error("Backend is waking up. Click again in a few seconds.")

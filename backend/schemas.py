@@ -7,6 +7,6 @@ class RecipeCreate(BaseModel):
     isVegetarian: bool
     prepTimeMinutes: int
     ingredients: List[str]
-    instructions: str
+    instructions: List[str]
     difficulty: str
     tags: List[str]
