@@ -1,97 +1,80 @@
 import streamlit as st
 import requests
-import time
 
+# 🔥 This MUST be your deployed FastAPI URL (Render)
 API = "https://recipe-maker-1-5xzf.onrender.com"
 
-st.set_page_config(page_title="Smart Recipe Explorer", layout="centered")
+st.set_page_config(page_title="Smart Recipe Explorer", layout="wide")
 
 st.title("🍳 Smart Recipe Explorer")
 
-# ---------------- AI GENERATION ----------------
-ingredients = st.text_input("Enter ingredients (comma-separated)")
+tab1, tab2 = st.tabs(["AI Generator", "Saved Recipes"])
 
-if st.button("Generate Recipe"):
-    if not ingredients.strip():
-        st.warning("Please enter ingredients")
-    else:
-        with st.spinner("Generating recipe using AI..."):
-            try:
-                # Wake Render backend
-                requests.get(f"{API}/", timeout=30)
-                time.sleep(2)
+# -------------------------------
+# TAB 1 — Generate Recipe
+# -------------------------------
+with tab1:
+    ingredients = st.text_input("Enter ingredients (comma-separated)")
 
-                res = requests.post(
-                    f"{API}/generate-recipe",
-                    json={"ingredients": ingredients},
-                    timeout=120
-                )
+    if st.button("Generate Recipe"):
+        if ingredients.strip() == "":
+            st.warning("Please enter ingredients")
+        else:
+            with st.spinner("Generating recipe..."):
+                try:
+                    response = requests.post(
+                        f"{API}/generate",
+                        json={"ingredients": ingredients}
+                    )
 
-                if res.status_code == 200:
-                    data = res.json()
+                    if response.status_code == 200:
+                        data = response.json()
+                        st.subheader(data["title"])
+                        st.write("### Ingredients")
+                        st.write(data["ingredients"])
+                        st.write("### Instructions")
+                        st.write(data["instructions"])
 
-                    st.subheader(data["name"])
+                        if st.button("💾 Save Recipe"):
+                            save_res = requests.post(
+                                f"{API}/recipes",
+                                json=data
+                            )
 
-                    st.markdown("### 🥕 Ingredients")
-                    for i in data["ingredients"]:
-                        st.write(f"- {i}")
+                            if save_res.status_code == 200:
+                                st.success("Recipe saved successfully!")
+                            else:
+                                st.error("Failed to save recipe")
 
-                    st.markdown("### 👨‍🍳 Instructions")
-                    for idx, step in enumerate(data["instructions"], 1):
-                        st.write(f"{idx}. {step}")
+                    else:
+                        st.error("Recipe generation failed")
 
-                    # SAVE TO DATABASE
-                    if st.button("💾 Save Recipe"):
-                        payload = {
-                            "name": data["name"],
-                            "cuisine": "AI Generated",
-                            "isVegetarian": True,
-                            "prepTimeMinutes": 15,
-                            "ingredients": data["ingredients"],
-                            "instructions": data["instructions"],
-                            "difficulty": "Medium",
-                            "tags": ["ai", "generated"]
-                        }
+                except Exception as e:
+                    st.error("Backend is not reachable. Check API deployment.")
 
-                        save = requests.post(f"{API}/recipes", json=payload)
+# -------------------------------
+# TAB 2 — Saved Recipes
+# -------------------------------
+with tab2:
+    st.subheader("📦 Saved Recipes")
 
-                        if save.status_code == 200:
-                            st.cache_data.clear()   # 🔥 force refresh
-                            st.success("Recipe saved!")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error(save.text)
+    try:
+        res = requests.get(f"{API}/recipes")
 
-                else:
-                    st.error("AI backend error")
+        if res.status_code == 200:
+            recipes = res.json()
 
-            except Exception:
-                st.error("Backend is waking up. Please try again in 20 seconds.")
+            if len(recipes) == 0:
+                st.info("No saved recipes yet")
+            else:
+                for r in recipes:
+                    with st.expander(r["title"]):
+                        st.write("### Ingredients")
+                        st.write(r["ingredients"])
+                        st.write("### Instructions")
+                        st.write(r["instructions"])
+        else:
+            st.error("Failed to fetch recipes")
 
-# ---------------- SAVED RECIPES ----------------
-st.markdown("---")
-st.markdown("## 📚 Saved Recipes")
-
-@st.cache_data(ttl=10)
-def load_recipes():
-    return requests.get(f"{API}/recipes").json()
-
-try:
-    recipes = load_recipes()
-
-    if recipes:
-        for r in recipes:
-            st.markdown(f"### {r['name']}")
-            st.write("Ingredients:", ", ".join(r["ingredients"]))
-            st.write("Difficulty:", r["difficulty"])
-
-            if st.button(f"🗑 Delete {r['id']}"):
-                requests.delete(f"{API}/recipes/{r['id']}")
-                st.cache_data.clear()
-                st.rerun()
-    else:
-        st.info("No saved recipes yet.")
-
-except:
-    st.warning("Could not load recipes.")
+    except:
+        st.error("Cannot connect to backend server")
