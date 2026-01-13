@@ -6,6 +6,10 @@ API = "https://recipe-maker-1-5xzf.onrender.com"
 st.set_page_config(page_title="Smart Recipe Explorer", layout="wide")
 st.title("🍳 Smart Recipe Explorer")
 
+# Allow overriding the API URL from the UI for local testing
+API = st.sidebar.text_input("API base URL", API)
+st.sidebar.caption("Use this to point the app at a local backend during development")
+
 tab1, tab2 = st.tabs(["AI Generator", "Saved Recipes"])
 
 with tab1:
@@ -47,10 +51,21 @@ with tab1:
 
                         s = requests.post(f"{API}/recipes", json=payload)
 
-                        if s.status_code == 200:
-                            st.success("Recipe saved")
+                        if s.status_code != 200:
+                            st.error(f"Recipe save failed: {s.status_code} — {s.text}")
                         else:
-                            st.error(s.text)
+                            saved = s.json()
+                            st.success("Recipe saved ✅")
+                            st.write(saved)
+
+                            # Immediately reload recipes to verify persistence
+                            r_reload = requests.get(f"{API}/recipes")
+                            if r_reload.status_code == 200:
+                                st.info("Reloaded recipes from server")
+                                recipes = r_reload.json()
+                                st.write(f"Total saved recipes: {len(recipes)}")
+                            else:
+                                st.warning(f"Failed to reload recipes: {r_reload.status_code}")
 
 with tab2:
     st.subheader("Saved Recipes")
@@ -59,13 +74,14 @@ with tab2:
         r = requests.get(f"{API}/recipes")
 
         if r.status_code != 200:
-            st.error("Failed to load")
+            st.error(f"Failed to load recipes: {r.status_code} — {r.text}")
         else:
             recipes = r.json()
 
             if not recipes:
                 st.info("No recipes yet")
             else:
+                st.success(f"Loaded {len(recipes)} recipes")
                 for rec in recipes:
                     with st.expander(rec["name"]):
                         st.markdown("**Ingredients**")

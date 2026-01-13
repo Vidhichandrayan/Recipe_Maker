@@ -81,7 +81,23 @@ Return ONLY valid JSON:
 # ---------------- CRUD ----------------
 @app.post("/recipes")
 def create_recipe(recipe: schemas.RecipeCreate, db: Session = Depends(get_db)):
-    return crud.create_recipe(db, recipe)
+    try:
+        db_recipe = crud.create_recipe(db, recipe)
+
+        return {
+            "id": db_recipe.id,
+            "name": db_recipe.name,
+            "cuisine": db_recipe.cuisine,
+            "isVegetarian": db_recipe.isVegetarian,
+            "prepTimeMinutes": db_recipe.prepTimeMinutes,
+            "ingredients": db_recipe.ingredients.split(","),
+            "instructions": db_recipe.instructions.split("|"),
+            "difficulty": db_recipe.difficulty,
+            "tags": db_recipe.tags.split(","),
+        }
+    except Exception as e:
+        print("Error saving recipe:", e)
+        raise HTTPException(status_code=500, detail="Failed to save recipe")
 
 @app.get("/recipes")
 def get_recipes(db: Session = Depends(get_db)):
