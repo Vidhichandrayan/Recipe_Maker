@@ -6,6 +6,10 @@ API = "https://recipe-maker-1-5xzf.onrender.com"
 st.set_page_config(page_title="Smart Recipe Explorer", layout="wide")
 st.title("🍳 Smart Recipe Explorer")
 
+# Initialize session state for the generated recipe
+if 'generated_recipe' not in st.session_state:
+    st.session_state.generated_recipe = None
+
 # Allow overriding the API URL from the UI for local testing
 API = st.sidebar.text_input("API base URL", API)
 st.sidebar.caption("Use this to point the app at a local backend during development")
@@ -27,45 +31,52 @@ with tab1:
 
                 if r.status_code != 200:
                     st.error("Recipe generation failed")
+                    st.session_state.generated_recipe = None
                 else:
                     data = r.json()
-                    st.subheader(data["name"])
+                    st.session_state.generated_recipe = data
 
-                    st.markdown("### Ingredients")
-                    st.write(data["ingredients"])
+    # Display the generated recipe if it exists in session state
+    if st.session_state.generated_recipe:
+        data = st.session_state.generated_recipe
+        
+        st.subheader(data["name"])
 
-                    st.markdown("### Instructions")
-                    st.write(data["instructions"])
+        st.markdown("### Ingredients")
+        st.write(data["ingredients"])
 
-                    if st.button("💾 Save Recipe"):
-                        payload = {
-                            "name": data["name"],
-                            "cuisine": "Other",
-                            "isVegetarian": False,
-                            "prepTimeMinutes": 30,
-                            "ingredients": data["ingredients"],
-                            "instructions": data["instructions"],
-                            "difficulty": "Medium",
-                            "tags": ["ai-generated"]
-                        }
+        st.markdown("### Instructions")
+        st.write(data["instructions"])
 
-                        s = requests.post(f"{API}/recipes", json=payload)
+        if st.button("💾 Save Recipe"):
+            payload = {
+                "name": data["name"],
+                "cuisine": "Other",
+                "isVegetarian": False,
+                "prepTimeMinutes": 30,
+                "ingredients": data["ingredients"],
+                "instructions": data["instructions"],
+                "difficulty": "Medium",
+                "tags": ["ai-generated"]
+            }
 
-                        if s.status_code != 200:
-                            st.error(f"Recipe save failed: {s.status_code} — {s.text}")
-                        else:
-                            saved = s.json()
-                            st.success("Recipe saved ✅")
-                            st.write(saved)
+            s = requests.post(f"{API}/recipes", json=payload)
 
-                            # Immediately reload recipes to verify persistence
-                            r_reload = requests.get(f"{API}/recipes")
-                            if r_reload.status_code == 200:
-                                st.info("Reloaded recipes from server")
-                                recipes = r_reload.json()
-                                st.write(f"Total saved recipes: {len(recipes)}")
-                            else:
-                                st.warning(f"Failed to reload recipes: {r_reload.status_code}")
+            if s.status_code != 200:
+                st.error(f"Recipe save failed: {s.status_code} — {s.text}")
+            else:
+                saved = s.json()
+                st.success("Recipe saved ✅")
+                st.write(saved)
+
+                # Immediately reload recipes to verify persistence
+                r_reload = requests.get(f"{API}/recipes")
+                if r_reload.status_code == 200:
+                    st.info("Reloaded recipes from server")
+                    recipes = r_reload.json()
+                    st.write(f"Total saved recipes: {len(recipes)}")
+                else:
+                    st.warning(f"Failed to reload recipes: {r_reload.status_code}")
 
 with tab2:
     st.subheader("Saved Recipes")
