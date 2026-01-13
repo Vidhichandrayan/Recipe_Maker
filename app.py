@@ -12,64 +12,58 @@ with tab1:
     ingredients = st.text_input("Enter ingredients (comma-separated)")
 
     if st.button("Generate Recipe"):
-        if ingredients.strip() == "":
-            st.warning("Please enter ingredients")
+        if not ingredients:
+            st.warning("Enter ingredients")
         else:
-            try:
-                res = requests.post(
+            with st.spinner("Generating..."):
+                r = requests.post(
                     f"{API}/generate-recipe",
-                    json={"ingredients": ingredients},
-                    timeout=30
+                    json={"ingredients": ingredients}
                 )
 
-                if res.status_code == 200:
-                    data = res.json()
-
+                if r.status_code != 200:
+                    st.error("Recipe generation failed")
+                else:
+                    data = r.json()
                     st.subheader(data["name"])
+
+                    st.markdown("### Ingredients")
                     st.write(data["ingredients"])
+
+                    st.markdown("### Instructions")
                     st.write(data["instructions"])
 
                     if st.button("💾 Save Recipe"):
                         payload = {
                             "name": data["name"],
-                            "ingredients": "\n".join(data["ingredients"]),
-                            "instructions": "\n".join(data["instructions"])
+                            "ingredients": data["ingredients"],
+                            "instructions": data["instructions"]
                         }
 
-                        save = requests.post(
-                            f"{API}/recipes",
-                            json=payload,
-                            timeout=30
-                        )
+                        s = requests.post(f"{API}/recipes", json=payload)
 
-                        if save.status_code == 200:
+                        if s.status_code == 200:
                             st.success("Recipe saved")
                         else:
-                            st.error("Save failed")
-
-                else:
-                    st.error("Recipe generation failed")
-
-            except Exception as e:
-                st.error("Backend waking up. Try again.")
+                            st.error(s.text)
 
 with tab2:
-    if st.button("Load Saved Recipes"):
-        try:
-            res = requests.get(f"{API}/recipes", timeout=30)
+    st.subheader("Saved Recipes")
 
-            if res.status_code == 200:
-                recipes = res.json()
+    if st.button("Load Recipes"):
+        r = requests.get(f"{API}/recipes")
 
-                if len(recipes) == 0:
-                    st.info("No recipes yet")
-                else:
-                    for r in recipes:
-                        with st.expander(r["name"]):
-                            st.write(r["ingredients"])
-                            st.write(r["instructions"])
+        if r.status_code != 200:
+            st.error("Failed to load")
+        else:
+            recipes = r.json()
+
+            if not recipes:
+                st.info("No recipes yet")
             else:
-                st.error("Failed to fetch recipes")
-
-        except:
-            st.error("Backend waking up. Try again.")
+                for rec in recipes:
+                    with st.expander(rec["name"]):
+                        st.markdown("**Ingredients**")
+                        st.write(rec["ingredients"])
+                        st.markdown("**Instructions**")
+                        st.write(rec["instructions"])
